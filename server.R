@@ -1,7 +1,5 @@
-# This code is to make ShinyR application for funMotifs database
-# By Nour-al-dain Marzouka
-# Modified by Husen M. Umer
-# Nour.dna.eng@gmail.com
+# This code is to make ShinyR application for funMotifs database By 
+# Nour-al-dain Marzouka, Husen M. Umer and Karolina Smolinska
 
 # load the needed packages
 library(RPostgreSQL)
@@ -20,10 +18,10 @@ options()
 # connect to the database
 pool <- dbPool(
   drv = dbDriver("PostgreSQL", max.con = 100),
-  dbname = "funmotifsdb",
-  host = "130.238.239.17",
-  user = "funmotifs",
-  password = "ks2018hum"#,
+  dbname = "db_name",
+  host = "host_name",
+  user = "db_user_name",
+  password = "db_pass"#,
   #idleTimeout = 3600000
 )
 onStop(function() { poolClose(pool) })
@@ -101,14 +99,36 @@ make_command_all_tissues <- function(chr_table, start, end){
 }
 
 # function to prepare table from the user text
-prepare_table_text <- function(text, sep){
-  if (text==""){
+#prepare_table_text <- function(text, sep){
+prepare_table_text <- function(text){
+   if (text==""){
     return(NULL)
   } else {
+    print(text)
+    if (grepl(";", text)){
+      sep = ";"
+    } else if (grepl("\t", text)){
+      sep = "\t"
+    }else if (grepl(" ", text)){
+      sep = " "
+    }else if (grepl(",", text)){
+        sep = ","
+    }else{
+      sep = ""
+    }
+    
+    suppressWarnings(
+      validate(need(tryCatch(read.table(text=text,
+                                                sep = sep, 
+                                                blank.lines.skip = T, 
+                                                stringsAsFactors = F,
+                                        colClasses = c("character")),      error=function (e){}), 
+                    "Invalid input format! Please check the manual")))
     text <- read.table(text=text,
                        sep = sep, 
                        blank.lines.skip = T, 
-                       stringsAsFactors = F)
+                       stringsAsFactors = F,
+                       colClasses = c("character"))
     return(text)
   }
 }
@@ -144,9 +164,11 @@ shinyServer(function(input, output, session) {
     }
     
     if (input$text_input_area != "") {
-      tbl <-   prepare_table_text(input$text_input_area, input$sep)
+      #tbl <-   prepare_table_text(input$text_input_area, input$sep)
+      tbl <-   prepare_table_text(input$text_input_area)
+      
       #validate(
-      #  need(ncol(mydata()) > 1, "Please select the right seperator option!")
+      #  need(ncol(mydata()) > 1, "Please select the right separator option!")
       #)
     }
     
@@ -161,14 +183,14 @@ shinyServer(function(input, output, session) {
   })
 
 #The following table is shown in the user manual
-  column_headers <- data.table(Header = c("motif_pos", "name", "score", "pval", "strand", "fscore", "chromhmm", "contactingdomain", "dnase__seq", "fantom", "loopdomain", "numothertfbinding", "othertfbinding", "replidomain", "tfbinding", "tfexpr"), Description= c("Represents the chromsome number (1-25), start position of the overlapping motif (1-based), and end position of the overlapping motif", "TF name and motif ID", "Motif prediction score calculated by FIMO", "P-value for the motif prediction calculated by FIMO", "DNA strand", "Functionality score of the motif. This is a summarized score to indicate activity of the motif. It is computed using a ligistic regression model for details see the paper", "Chromatin states predicted based on histone modification marks using ChromHMM in the RoadMap Epigenomics project", "HiC contacting domain, the input region is overlapping one of the two sides of an interaction that is identified in HiC experiments. In cases where the tissue type does not have any HiC data, the average of tissue types with HiC contact domain at the loci are given.", "DNase1 hypersensitivity site, the value indicates the signal value as obtained from average DNas1 peaks across relevant data sets", "TSS expression at the loci as obtained from CAGE experiments in the FANTOM5 project ", "Similar to contactingdomain, but the region between the interaction points", "Number of TFs that are bound at the loci (excl. the matching TF)", "List of the bound TFs", "Replication timing category of the loci. ERD: arly replication domain; DTZ: down transition zone; LRD: late replication domain; UTZ: up transition zone", "Matching TF binding. A value above zero indicates evidence of binding. NA refers to the lack of data for the given factor", "Expression level of the TF in the tissue"))
+  column_headers <- data.table(Header = c("motif_pos", "name", "score", "pval", "strand", "fscore", "chromhmm", "contactingdomain", "dnase__seq", "fantom", "loopdomain", "numothertfbinding", "othertfbinding", "replidomain", "tfbinding", "tfexpr"), Description= c("Represents the chromosome number (1-25), start position of the overlapping motif (1-based), and end position of the overlapping motif", "TF name and motif ID", "Motif prediction score calculated by FIMO", "P-value for the motif prediction calculated by FIMO", "DNA strand", "Functionality score of the motif. This is a summarized score to indicate activity of the motif. It's computed using a logistic regression model, for details see the paper", "Chromatin states predicted based on histone modification marks using ChromHMM results from the RoadMap Epigenomics project", "Hi-C contacting domain, the input region is overlapping one of the two sides of an interaction that is identified in Hi-C experiments. In cases where the tissue type does not have any Hi-C data, the average of tissue types with Hi-C contact domain at the loci are given.", "DNaseI hypersensitivity site, the value indicates the signal value as obtained from average DNaseI peaks across relevant data sets", "TSS expression at the loci as obtained from CAGE experiments in the FANTOM5 project ", "Similar to contactingdomain, the input region overlaps the region between the interaction domains", "Number of TFs that are bound at the loci (excl. the matching TF)", "List of the bound TFs", "Replication timing category of the loci. ERD: early replication domain; DTZ: down transition zone; LRD: late replication domain; UTZ: up transition zone", "Matching TF binding. A value above zero indicates evidence of binding. NA refers to the lack of data for the given factor", "Expression level of the TF in the tissue"))
 
 
   output$tbl <- renderTable({ head( column_headers, n=20)})
   # Display the user input
    output$show_user_table <- renderTable({
      validate(
-      need(ncol(mydata()) > 1, "Please enter or upload your input regions and select the right seperator option!")
+      need(ncol(mydata()) > 1, "Please enter or upload your input regions and select the right separator option!")
      )
      head(mydata(),5)
    })
@@ -183,7 +205,7 @@ shinyServer(function(input, output, session) {
       } else {
         
         validate(
-          need(ncol(mydata()) > 1, "Please select the right seperator option!")
+          need(ncol(mydata()) > 1, "Invalid input format! Please check the manual")
         )
         # for all tissues
         if (input$tissues == "all_tissues"){
@@ -197,7 +219,7 @@ shinyServer(function(input, output, session) {
           # merge the output with user columns
           from_user <- mydata()[rep(row.names(mydata()), sapply(x, nrow)), 1:3]
           colnames(from_user) <- c("chr","start","end")
-          x <- rbindlist(x)
+          x <- rbindlist(x, fill=T)
           x <- cbind(from_user,x)
           reactive$output_table <- x
           return(head(reactive$output_table)[,1:10])
@@ -216,7 +238,7 @@ shinyServer(function(input, output, session) {
           # merge the output with user columns
           from_user <- mydata()[rep(row.names(mydata()), sapply(x, nrow)), 1:3]
           colnames(from_user) <- c("chr","start","end")
-          x <- rbindlist(x)
+          x <- rbindlist(x, fill=T)
           x <- cbind(from_user,x)
           reactive$output_table <- x
           return(head(reactive$output_table)[,1:10])
@@ -262,7 +284,7 @@ shinyServer(function(input, output, session) {
                                    "alt")
           # print(from_user)
           # print(x)
-          x <- rbindlist(x)
+          x <- rbindlist(x, fill=T)
           
           x <- cbind(from_user,x)
           reactive$output_table <- x

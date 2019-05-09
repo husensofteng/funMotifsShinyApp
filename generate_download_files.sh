@@ -1,11 +1,11 @@
-downloadhtmlfile="../../download.html"
+downloadhtmlfile="../../download.html.funmotifs"
 db_name="funmotifsdb"
 tables_db_filename="table_names_funmotifsdb.txt"
 output_dir="www/"
 output_dir2="bed/"
 motifs_table="motifs"
 all_tissues_table="all_tissues"
-col_names_motifs="chr,motifstart,motifend,name,score,pval,strand"
+col_names_motifs="chr,motifstart,motifend,name,score,strand,pval"
 col_names_all_tissues="blood,brain,breast,cervix,colon,esophagus,kidney,liver,lung,myeloid,pancreas,prostate,skin,stomach,uterus"
 col_names_tissue_table="fscore, chromhmm, contactingdomain, dnase__seq, fantom, loopdomain, numothertfbinding, othertfbinding, replidomain, tfbinding, tfexpr"
 limit_stmt=""
@@ -21,9 +21,12 @@ echo "<h4><p><b>Potential functional motifs per tissue type</b></p></h4><hr/><ul
 while read -r name
 do
         echo $output_dir$name.funmotifs
-        psql -d $db_name -A -F $'\t' --pset footer -c "select $col_names_motifs,$col_names_tissue_table from $motifs_table,$name where $motifs_table.mid=$name.mid and dnase__seq>0 and (tfexpr>0 or tfexpr='nan') and (fscore>2.55 or (tfbinding>0 and tfbinding!='NaN'))$limit_stmt;" -o $name.funmotifs.bed
-tar -czvf $name.funmotifs.bed.tar.gz $name.funmotifs.bed
-echo "<li><a href='$output_dir2$name.funmotifs.bed.tar.gz' download>$name.funmotifs</a><br/></li>" >> $downloadhtmlfile
+        psql -d $db_name -A -F $'\t' --pset footer -c "select $col_names_motifs,$col_names_tissue_table from $motifs_table,$name where $motifs_table.mid=$name.mid and dnase__seq>0 and (tfexpr>0 or tfexpr='nan') and (fscore>2.55 or (tfbinding>0 and tfbinding!='NaN'))$limit_stmt order by chr,motifstart,motifend;" -o $name.funmotifs_sorted.bed
+bgzip $name.funmotifs_sorted.bed
+tabix -p bed --skip-lines 1 $name.funmotifs_sorted.bed.gz
+
+#tar -czvf $name.funmotifs.bed.tar.gz $name.funmotifs.bed.gz
+echo "<li><a href='$output_dir2$name.funmotifs_sorted.bed.gz' download>$name.funmotifs</a> (<a href='$output_dir2$name.funmotifs_sorted.bed.gz.tbi'>.tbi</a>)<br/></li>" >> $downloadhtmlfile
 done < $tables_db_filename
 echo "</ul>" >>  $downloadhtmlfile
 
@@ -52,17 +55,20 @@ psql -d $db_name --pset footer -c "SELECT distinct(table_name) as table_name FRO
 echo "<br/><hr/><h4><p><b>All scored motifs per tissue type</b></p></h4><hr/>" >> $downloadhtmlfile
 
 #write the column headers to an outputfile
-psql -d $db_name -A -F $'\t' --pset footer -c "select $col_names_motifs$tissues from $motifs_table,$all_tissues_table where $motifs_table.mid=$all_tissues_table.mid limit 0;" > $all_tissues_table.bed
+psql -d $db_name -A -F $'\t' --pset footer -c "select $col_names_motifs$tissues from $motifs_table,$all_tissues_table where $motifs_table.mid=$all_tissues_table.mid limit 0;" > $all_tissues_table.funmotifs_sorted.bed
 
 while read -r name
 do
         echo $output_dir$name
-psql -d $db_name -A -F $'\t' -t -c "select $col_names_motifs$tissues from $name,$all_tissues_table where $name.mid=$all_tissues_table.mid$limit_stmt;" >> $all_tissues_table.bed
+psql -d $db_name -A -F $'\t' -t -c "select $col_names_motifs$tissues from $name,$all_tissues_table where $name.mid=$all_tissues_table.mid$limit_stmt order by chr, motifstart, motifend;" >> $all_tissues_table.bed
 done < $tables_motifs_db_filename
-tar -czvf $all_tissues_table.bed.tar.gz $all_tissues_table.bed
+#tar -czvf $all_tissues_table.bed.tar.gz $all_tissues_table.bed
+sort -k1,1n -k2,2n -k3,3n $all_tissues_table.bed >> $all_tissues_table.funmotifs_sorted.bed
+bgzip $all_tissues_table.funmotifs_sorted.bed
+tabix -p bed --skip-lines 1 $all_tissues_table.funmotifs_sorted.bed.gz
 
+echo "<ul><li><a href='$output_dir2$all_tissues_table.funmotifs_sorted.bed.gz' download>All motifs: fscore per tissue type</a> (<a href='$output_dir2$all_tissues_table.funmotifs_sorted.bed.gz.tbi'>.tbi</a>)</li></ul><br/>" >> $downloadhtmlfile
 
-echo "<ul><li><a href='$output_dir2$all_tissues_table.bed.tar.gz' download>All motifs: fscore per tissue type</a></li></ul><br/>" >> $downloadhtmlfile
 
 
 
